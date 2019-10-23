@@ -32,35 +32,26 @@
 // CONFIGURATION (FOR APPLICATION CALLBACKS BELOW)
 //////////////////////////////////////////////////
 
-// application router ID (LSBF)
-static const u1_t APPEUI[8]  = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+static const u1_t NWKSKEY[16] = { 0x5D, 0xE3, 0x7E, 0x91, 0x67, 0x57, 0x75, 0x9F, 0xCF, 0x81, 0xCA, 0x68, 0x4C, 0x25, 0x3E, 0x35 };
 
-// unique device ID (LSBF)
-static const u1_t DEVEUI[8]  = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+static const u1_t APPSKEY[16] = { 0x85, 0x06, 0x54, 0xCC, 0xC7, 0x61, 0x4C, 0xFC, 0xCF, 0xA1, 0x38, 0xBD, 0xFC, 0x28, 0x5E, 0x82 };
 
-// device-specific AES key (derived from device EUI)
-static const u1_t DEVKEY[16] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+// LoRaWAN end-device address (DevAddr)
+static const u4_t DEVADDR = 0x2604185D ; // <-- Change this address for every node!
 
+static void do_send(osjob_t*);
+static char mydata[32] = "Hello, world!";
+static osjob_t sendjob;
 
 //////////////////////////////////////////////////
 // APPLICATION CALLBACKS
+// These callbacks are only used in over-the-air activation, so they are
+// left empty here (we cannot leave them out completely unless
+// DISABLE_JOIN is set in config.h, otherwise the linker will complain).
 //////////////////////////////////////////////////
-
-// provide application router ID (8 bytes, LSBF)
-void os_getArtEui (u1_t* buf) {
-    memcpy(buf, APPEUI, 8);
-}
-
-// provide device ID (8 bytes, LSBF)
-void os_getDevEui (u1_t* buf) {
-    memcpy(buf, DEVEUI, 8);
-}
-
-// provide device key (16 bytes)
-void os_getDevKey (u1_t* buf) {
-    memcpy(buf, DEVKEY, 16);
-}
-
+void os_getArtEui (u1_t* buf) { }
+void os_getDevEui (u1_t* buf) { }
+void os_getDevKey (u1_t* buf) { }
 
 //////////////////////////////////////////////////
 // MAIN - INITIALIZATION AND STARTUP
@@ -70,9 +61,21 @@ void os_getDevKey (u1_t* buf) {
 static void initfunc (osjob_t* j) {
     // reset MAC state
     LMIC_reset();
+
     // start joining
-    LMIC_startJoining();
-    // init done - onEvent() callback will be invoked...
+    LMIC_setSession (0x1, DEVADDR, NWKSKEY, APPSKEY);
+
+    // Disable link check validation
+    LMIC_setLinkCheckMode(0);
+
+    // TTN uses SF9 for its RX2 window.
+    LMIC.dn2Dr = DR_SF9;
+
+    // Set data rate and transmit power for uplink (note: txpow seems to be ignored by the library)
+    LMIC_setDrTxpow(DR_SF7,14);
+
+    // Start job
+    do_send(&sendjob);
 }
 
 
@@ -97,17 +100,19 @@ int main () {
 // UTILITY JOB
 //////////////////////////////////////////////////
 
-static osjob_t blinkjob;
-static u1_t ledstate = 0;
 
-static void blinkfunc (osjob_t* j) {
-    // toggle LED
-    ledstate = !ledstate;
-    debug_led(ledstate);
-    // reschedule blink job
-    os_setTimedCallback(j, os_getTime()+ms2osticks(100), blinkfunc);
+void do_send(osjob_t* j){
+    // Check if there is not a current TX/RX job running
+    if (LMIC.opmode & OP_TXRXPEND) {
+        debug_str("OP_TXRXPEND, not sending\r\n");
+    } else {
+        // Prepare upstream data transmission at the next possible time.
+        LMIC_setTxData2(1, mydata, sizeof(mydata)-1, 0);
+        debug_str("Packet queued\r\n");
+    }
+
+    os_setTimedCallback(j, os_getTime()+sec2osticks(10), do_send);
 }
-
 
 //////////////////////////////////////////////////
 // LMIC EVENT CALLBACK
@@ -118,19 +123,28 @@ void onEvent (ev_t ev) {
 
     switch(ev) {
 
-      // starting to join network
-      case EV_JOINING:
-          // start blinking
-          blinkfunc(&blinkjob);
+      case EV_TXCOMPLETE:
+          debug_str("EV_TXCOMPLETE (includes waiting for RX windows)\r\n");
+          if (LMIC.txrxFlags & TXRX_ACK)
+            debug_str("Received ack\r\n");
+          if (LMIC.dataLen) {
+            debug_str("Received ");
+            debug_val("len=", LMIC.dataLen);
+            debug_str(" bytes of payload\r\n");
+          }
           break;
-          
-      // network joined, session established
-      case EV_JOINED:
-          // cancel blink job
-          os_clearCallback(&blinkjob);
-          // switch on LED
-          debug_led(1);
-          // (don't schedule any new actions)
+      case EV_LOST_TSYNC:
+          debug_str("EV_LOST_TSYNC\r\n");
           break;
+      case EV_RESET:
+          debug_str("EV_RESET\r\n");
+          break;
+      case EV_RXCOMPLETE:
+          // data received in ping slot
+          debug_str("EV_RXCOMPLETE\r\n");
+          break;
+      default: 
+          debug_str("EV...\r\n");
+	  break;
     }
 }
