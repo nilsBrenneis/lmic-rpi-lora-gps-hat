@@ -55,7 +55,7 @@ const int WIRING_PI_PIN_RST = 0;
 const int WIRING_PI_PIN_DIO[3] = { 7, 4, 5 };
 
 // Note: BCM Pin Numbering Schema
-const int BCM_PIN_DIO[3] = { 4, 23, 24 };
+const int BCM_PIN_DIO[3] = { 4, -1, -1 };
 
 // Local function prototypes
 void hal_time_init();
@@ -83,13 +83,16 @@ void hal_init () {
    // their values using the OS system call "poll". For this reason, we
    // needed to implement it on our own.
    for (int i=0 ; i<3 ; i++) {
-      gpioUnexportPin(BCM_PIN_DIO[i]);
+      if (BCM_PIN_DIO[i] >= 0)
+          gpioUnexportPin(BCM_PIN_DIO[i]);
    }
 
    for (int i=0 ; i<3 ; i++) {
-      gpioExportPin(BCM_PIN_DIO[i]);
-      gpioSetPinDirection(BCM_PIN_DIO[i], GPIO_DIRECTION_IN);
-      gpioSetPinEdge(BCM_PIN_DIO[i], GPIO_EDGE_RISING); 
+      if (BCM_PIN_DIO[i] >= 0) {
+      	  gpioExportPin(BCM_PIN_DIO[i]);
+      	  gpioSetPinDirection(BCM_PIN_DIO[i], GPIO_DIRECTION_IN);
+      	  gpioSetPinEdge(BCM_PIN_DIO[i], GPIO_EDGE_RISING); 
+      }
    }
 
    int rc = wiringPiSPISetup(0, 10000000);
@@ -130,7 +133,8 @@ void hal_init () {
 void hal_failed () {
    fprintf(stderr, "%09d HAL: Failed. Aborting.\n", osticks2ms(hal_ticks()));
    for (int i=0 ; i<3 ; i++) {
-      gpioUnexportPin(BCM_PIN_DIO[i]);
+      if (BCM_PIN_DIO[i] >= 0) 
+          gpioUnexportPin(BCM_PIN_DIO[i]);
    }
    exit(EXIT_FAILURE);
 }
@@ -305,7 +309,7 @@ u1_t hal_checkTimer (u4_t target_ticks) {
 
 void hal_sleep () {
    if (sleep_interval_ms > 0) {
-      int rc = gpioWaitForInterrupt(BCM_PIN_DIO, 3, sleep_interval_ms);
+      int rc = gpioWaitForInterrupt(BCM_PIN_DIO, 1, sleep_interval_ms);
       if(rc < 0) {
          fprintf(stderr, "HAL: Cannot poll: %s\n", strerror(errno));
          hal_failed();
