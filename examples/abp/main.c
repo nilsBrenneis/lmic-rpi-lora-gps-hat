@@ -28,16 +28,20 @@
 #include "lmic.h"
 #include "debug.h"
 
+// sensor functions
+extern void initsensor(void);
+extern u2_t readsensor(void);
+
 //////////////////////////////////////////////////
 // CONFIGURATION (FOR APPLICATION CALLBACKS BELOW)
 //////////////////////////////////////////////////
 
-static const u1_t NWKSKEY[16] = { 0x5D, 0xE3, 0x7E, 0x91, 0x67, 0x57, 0x75, 0x9F, 0xCF, 0x81, 0xCA, 0x68, 0x4C, 0x25, 0x3E, 0x35 };
+static const u1_t NWKSKEY[16] = { 0x08, 0x1E, 0x80, 0xCF, 0xB4, 0x3D, 0x96, 0x36, 0xF3, 0x2B, 0x80, 0xF2, 0xD3, 0xEC, 0x31, 0xC6 };
 
-static const u1_t APPSKEY[16] = { 0x85, 0x06, 0x54, 0xCC, 0xC7, 0x61, 0x4C, 0xFC, 0xCF, 0xA1, 0x38, 0xBD, 0xFC, 0x28, 0x5E, 0x82 };
+static const u1_t APPSKEY[16] = { 0x07, 0xF1, 0x69, 0xD6, 0xE5, 0x32, 0xF7, 0x8A, 0xC3, 0xA9, 0x91, 0x00, 0x76, 0x3C, 0x54, 0xE3 };
 
 // LoRaWAN end-device address (DevAddr)
-static const u4_t DEVADDR = 0x2604185D ; // <-- Change this address for every node!
+static const u4_t DEVADDR = 0x260130C9 ; // <-- Change this address for every node!
 
 static void do_send(osjob_t*);
 static char mydata[32] = "Hello, world!";
@@ -107,7 +111,12 @@ void do_send(osjob_t* j){
         debug_str("OP_TXRXPEND, not sending\r\n");
     } else {
         // Prepare upstream data transmission at the next possible time.
-        LMIC_setTxData2(1, mydata, sizeof(mydata)-1, 0);
+        u2_t val = readsensor();
+        debug_val("val = ", val);
+        // prepare and schedule data for transmission
+        LMIC.frame[0] = val >> 8;
+        LMIC.frame[1] = val;
+        LMIC_setTxData2(1, LMIC.frame, 2, 0); // (port 1, 2 bytes, unconfirmed)
         debug_str("Packet queued\r\n");
     }
 
@@ -148,3 +157,4 @@ void onEvent (ev_t ev) {
 	  break;
     }
 }
+
