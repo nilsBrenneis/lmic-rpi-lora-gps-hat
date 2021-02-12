@@ -27,10 +27,12 @@
 
 #include "lmic.h"
 #include "debug.h"
+#include <stdio.h> /* printf, sprintf */
+#include <time.h>
 
-// sensor functions
-extern void initsensor(void);
-extern u2_t readsensor(void);
+// http function
+extern char * getTuples(long);
+
 
 //////////////////////////////////////////////////
 // CONFIGURATION (FOR APPLICATION CALLBACKS BELOW)
@@ -44,7 +46,6 @@ static const u1_t APPSKEY[16] = { 0x07, 0xF1, 0x69, 0xD6, 0xE5, 0x32, 0xF7, 0x8A
 static const u4_t DEVADDR = 0x260130C9 ; // <-- Change this address for every node!
 
 static void do_send(osjob_t*);
-static char mydata[32] = "Hello, world!";
 static osjob_t sendjob;
 
 //////////////////////////////////////////////////
@@ -111,16 +112,21 @@ void do_send(osjob_t* j){
         debug_str("OP_TXRXPEND, not sending\r\n");
     } else {
         // Prepare upstream data transmission at the next possible time.
-        u2_t val = readsensor();
-        debug_val("val = ", val);
+
+        unsigned int uint_currentTimestamp = (unsigned)time(NULL); 
+        long long_current_timestamp = (long) uint_currentTimestamp;
+
+        printf("long_current_timestamp:\n%ld\n", long_current_timestamp);
+        char *result;
+        result = getTuples(long_current_timestamp);
+        printf("Result:\n%s\n",result);
+
         // prepare and schedule data for transmission
-        LMIC.frame[0] = val >> 8;
-        LMIC.frame[1] = val;
-        LMIC_setTxData2(1, LMIC.frame, 2, 0); // (port 1, 2 bytes, unconfirmed)
+        LMIC_setTxData2(1, result, sizeof(&result), 0); // (port 1, 2 bytes, unconfirmed)
         debug_str("Packet queued\r\n");
     }
 
-    os_setTimedCallback(j, os_getTime()+sec2osticks(10), do_send);
+    os_setTimedCallback(j, os_getTime()+sec2osticks(1), do_send);
 }
 
 //////////////////////////////////////////////////
