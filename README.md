@@ -61,15 +61,19 @@ Directory: /src
 
 Modifications necessary: 
 
-File /src/main.c:
+File /src/sendConsumption/main.c:
 
-* Adapt "application router ID (LSBF)" like already described under examples/join.
-* Adapt "unique device ID (LSBF)" like already described under examples/join.
-* Adapt "device-specific AES key " like already described under examples/join.
+* Adapt "NWKSKEY" 
+* Adapt "APPSKEY" 
+* Adapt "DEVADDR" 
+
+File /src/sendConsumption/rest_client.c
+
+* Adapt "http_uuid" 
 
 Build:
 
-    cd src/sendConsumption
+    cd /src/sendConsumption/sendConsumption
     make clean
     make
     sudo ./build/sendConsumption.out
